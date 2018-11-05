@@ -55,11 +55,11 @@ func NewWatcher(paths *model.RevelContainer, eagerRefresh bool) *Watcher {
 		forceRefresh:   true,
 		lastError:      -1,
 		paths:          paths,
-		refreshTimerMS: time.Duration(paths.Config.IntDefault("watch.rebuild.delay", 10)),
+		refreshTimerMS: time.Duration(paths.Info.Config.IntDefault("watch.rebuild.delay", 10)),
 		eagerRefresh: eagerRefresh ||
-			paths.DevMode &&
-				paths.Config.BoolDefault("watch", true) &&
-				paths.Config.StringDefault("watch.mode", "normal") == "eager",
+			paths.Info.DevMode &&
+				paths.Info.Config.BoolDefault("watch", true) &&
+				paths.Info.Config.StringDefault("watch.mode", "normal") == "eager",
 		timerMutex:          &sync.Mutex{},
 		refreshChannel:      make(chan *utils.Error, 10),
 		refreshChannelCount: 0,
@@ -96,7 +96,7 @@ func (w *Watcher) Listen(listener Listener, roots ...string) {
 
 		fi, err := os.Stat(p)
 		if err != nil {
-			utils.Logger.Fatal("Watcher: Failed to stat watched path", "path", p, "error", err)
+			utils.Logger.Panic("Watcher: Failed to stat watched path", "path", p, "error", err)
 			continue
 		}
 

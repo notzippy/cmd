@@ -13,7 +13,6 @@ import (
 	"github.com/revel/cmd/harness"
 	"github.com/revel/cmd/model"
 	"github.com/revel/cmd/utils"
-	"go/build"
 )
 
 var cmdBuild = &Command{
@@ -64,7 +63,7 @@ func buildApp(c *model.CommandConfig) (err error) {
 	c.Build.Mode = mode
 	c.Build.ImportPath = appImportPath
 
-	revel_paths, err := model.NewRevelPaths(mode, appImportPath, "", model.NewWrappedRevelCallback(nil, c.PackageResolver))
+	revel_paths, err := model.NewRevelPaths(mode, appImportPath, model.NewWrappedRevelCallback(nil, c.PackageResolver))
 	if err != nil {
 		return
 	}
@@ -82,13 +81,8 @@ func buildApp(c *model.CommandConfig) (err error) {
 	// - binary
 	// - revel
 	// - app
-
-	packageFolders, err := buildCopyFiles(c, app, revel_paths)
-	if err != nil {
-		return
-	}
-	err = buildCopyModules(c, revel_paths, packageFolders)
-	if err != nil {
+	err = buildCopyFiles(c,app,revel_paths)
+	if err!=nil {
 		return
 	}
 	err = buildWriteScripts(c, app)
@@ -98,6 +92,45 @@ func buildApp(c *model.CommandConfig) (err error) {
 	return
 }
 
+// Using the given container copy over all the build files
+func buildCopyFiles(c *model.CommandConfig,app *harness.App, rp *model.RevelContainer) (err error) {
+	destPath := c.Build.TargetPath
+	srcPath := filepath.Join(destPath, "src")
+	destBinaryPath := filepath.Join(destPath, filepath.Base(app.BinaryPath))
+	if err = utils.CopyFile(destBinaryPath, app.BinaryPath); err != nil {
+		return
+	}
+	utils.MustChmod(destBinaryPath, 0755)
+	packageFolders := strings.Split(rp.Info.Config.StringDefault("package.folders", "conf,public,app/views"), ",")
+	for i, p := range packageFolders {
+		// Clean spaces, reformat slash to filesystem
+		packageFolders[i] = filepath.FromSlash(strings.TrimSpace(p))
+	}
+	for _, u := range rp.Units {
+		tmpUnitPath := filepath.Join(srcPath, filepath.FromSlash(u.ImportPath))
+		if c.Build.CopySource {
+			err = utils.CopyDir(filepath.Join(srcPath, tmpUnitPath), u.BasePath, nil)
+			if err != nil {
+				return
+			}
+		} else {
+			for _, folder := range packageFolders {
+				err = utils.CopyDir(
+					filepath.Join(srcPath, tmpUnitPath, folder),
+					filepath.Join(srcPath, folder),
+					nil)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}
+	return
+}
+
+
+// TODO Remove
+/*
 // Copy the files to the target
 func buildCopyFiles(c *model.CommandConfig, app *harness.App, revel_paths *model.RevelContainer) (packageFolders []string, err error) {
 	appImportPath, destPath := c.ImportPath, c.Build.TargetPath
@@ -201,7 +234,7 @@ func buildCopyModules(c *model.CommandConfig, revel_paths *model.RevelContainer,
 
 	return
 }
-
+*/
 // Write the run scripts for the build
 func buildWriteScripts(c *model.CommandConfig, app *harness.App) (err error) {
 	tmplData := map[string]interface{}{

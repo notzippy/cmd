@@ -68,9 +68,9 @@ func (h *Harness) renderError(iw http.ResponseWriter, ir *http.Request, err erro
 	}
 	templateSet := template.New("__root__")
 	seekViewOnPath := func(view string) (path string) {
-		path = filepath.Join(h.paths.ViewsPath, "errors", view)
+		path = filepath.Join(h.paths.App.GetViewPath(), "errors", view)
 		if !utils.Exists(path) {
-			path = filepath.Join(h.paths.RevelPath, "templates", "errors", view)
+			path = filepath.Join(h.paths.Units.Get(model.REVEL).BasePath, "templates", "errors", view)
 		}
 
 		data, err := ioutil.ReadFile(path)
@@ -104,8 +104,8 @@ func (h *Harness) renderError(iw http.ResponseWriter, ir *http.Request, err erro
 		panic("no error provided")
 	}
 	viewArgs := map[string]interface{}{}
-	viewArgs["RunMode"] = h.paths.RunMode
-	viewArgs["DevMode"] = h.paths.DevMode
+	viewArgs["RunMode"] = h.paths.Info.RunMode
+	viewArgs["DevMode"] = h.paths.Info.DevMode
 	viewArgs["Error"] = revelError
 
 	// Render the template from the file
@@ -158,10 +158,10 @@ func NewHarness(c *model.CommandConfig, paths *model.RevelContainer, runMode str
 	//	revel.RevelLog.Error("Template loader error", "error", err)
 	//}
 
-	addr := paths.HTTPAddr
-	port := paths.Config.IntDefault("harness.port", 0)
+	addr := paths.Server.HTTPAddr
+	port := paths.Info.Config.IntDefault("harness.port", 0)
 	scheme := "http"
-	if paths.HTTPSsl {
+	if paths.Server.HTTPSsl {
 		scheme = "https"
 	}
 
@@ -189,7 +189,7 @@ func NewHarness(c *model.CommandConfig, paths *model.RevelContainer, runMode str
 		runMode:    runMode,
 	}
 
-	if paths.HTTPSsl {
+	if paths.Server.HTTPSsl {
 		serverHarness.proxy.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
@@ -262,11 +262,11 @@ func (h *Harness) WatchFile(filename string) bool {
 // server, which it runs and rebuilds as necessary.
 func (h *Harness) Run() {
 	var paths []string
-	if h.paths.Config.BoolDefault("watch.gopath", false) {
+	if h.paths.Info.Config.BoolDefault("watch.gopath", false) {
 		gopaths := filepath.SplitList(build.Default.GOPATH)
 		paths = append(paths, gopaths...)
 	}
-	paths = append(paths, h.paths.CodePaths...)
+	paths = append(paths, h.paths.Units.GetCodePaths()...)
 	h.watcher = watcher.NewWatcher(h.paths, false)
 	h.watcher.Listen(h, paths...)
 	h.watcher.Notify()
@@ -274,18 +274,18 @@ func (h *Harness) Run() {
 	if h.useProxy {
 		go func() {
 			// Check the port to start on a random port
-			if h.paths.HTTPPort == 0 {
-				h.paths.HTTPPort = getFreePort()
+			if h.paths.Server.HTTPPort == 0 {
+				h.paths.Server.HTTPPort = getFreePort()
 			}
-			addr := fmt.Sprintf("%s:%d", h.paths.HTTPAddr, h.paths.HTTPPort)
+			addr := fmt.Sprintf("%s:%d", h.paths.Server.HTTPAddr, h.paths.Server.HTTPPort)
 			utils.Logger.Infof("Proxy server is listening on %s", addr)
 
 			var err error
-			if h.paths.HTTPSsl {
+			if h.paths.Server.HTTPSsl {
 				err = http.ListenAndServeTLS(
 					addr,
-					h.paths.HTTPSslCert,
-					h.paths.HTTPSslKey,
+					h.paths.Server.HTTPSslCert,
+					h.paths.Server.HTTPSslKey,
 					h)
 			} else {
 				err = http.ListenAndServe(addr, h)
@@ -328,7 +328,7 @@ func (h *Harness) proxyWebsocket(w http.ResponseWriter, r *http.Request, host st
 		d   net.Conn
 		err error
 	)
-	if h.paths.HTTPSsl {
+	if h.paths.Server.HTTPSsl {
 		// since this proxy isn't used in production,
 		// it's OK to set InsecureSkipVerify to true
 		// no need to add another configuration option.

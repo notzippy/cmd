@@ -11,10 +11,17 @@ import (
 // Else, specs is returned unchanged.
 func appendStruct(fileName string, specs []*model.TypeInfo, pkgImportPath string, pkg *ast.Package, decl ast.Decl, imports map[string]string, fset *token.FileSet) []*model.TypeInfo {
 	// Filter out non-Struct type declarations.
-	spec, found := getStructTypeDecl(decl, fset)
+	genDecl, found := getStructTypeDecl(decl, fset)
 	if !found {
 		return specs
 	}
+	spec := genDecl.Specs[0].(*ast.TypeSpec)
+
+	if _,found = spec.Type.(*ast.StructType);!found {
+		return specs
+	}
+
+
 
 	structType := spec.Type.(*ast.StructType)
 
@@ -25,6 +32,7 @@ func appendStruct(fileName string, specs []*model.TypeInfo, pkgImportPath string
 		StructName:  spec.Name.Name,
 		ImportPath:  pkgImportPath,
 		PackageName: pkg.Name,
+		Options: processComment(genDecl.Doc),
 	}
 
 	for _, field := range structType.Fields.List {
@@ -124,8 +132,10 @@ func appendAction(fset *token.FileSet, mm methodMap, decl ast.Decl, pkgImportPat
 		return
 	}
 
+
 	method := &model.MethodSpec{
 		Name: funcDecl.Name.Name,
+		Options: processComment(funcDecl.Doc),
 	}
 
 	// Add a description of the arguments to the method.
@@ -220,4 +230,25 @@ func appendSourceInfo(srcInfo1, srcInfo2 *model.SourceInfo) *model.SourceInfo {
 		srcInfo1.ValidationKeys[k] = v
 	}
 	return srcInfo1
+}
+
+// getStructTypeDecl checks if the given decl is a type declaration for a
+// struct.  If so, the TypeSpec is returned.
+func getStructTypeDecl(decl ast.Decl, fset *token.FileSet) (genDecl *ast.GenDecl, found bool) {
+	genDecl, ok := decl.(*ast.GenDecl)
+	if !ok {
+		return
+	}
+
+	if genDecl.Tok != token.TYPE {
+		return
+	}
+
+	if len(genDecl.Specs) == 0 {
+		utils.Logger.Warn("Warn: Surprising: %s:%d Decl contains no specifications", fset.Position(decl.Pos()).Filename, fset.Position(decl.Pos()).Line)
+		return
+	}
+	found = true
+
+	return
 }

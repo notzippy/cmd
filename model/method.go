@@ -1,5 +1,9 @@
 package model
 
+import (
+	"github.com/revel/cmd/controller"
+)
+
 // methodCall describes a call to c.Render(..)
 // It documents the argument names used, in order to propagate them to RenderArgs.
 type MethodCall struct {
@@ -10,9 +14,10 @@ type MethodCall struct {
 
 // MethodSpec holds the information of one Method
 type MethodSpec struct {
-	Name        string        // Name of the method, e.g. "Index"
-	Args        []*MethodArg  // Argument descriptors
-	RenderCalls []*MethodCall // Descriptions of Render() invocations from this Method.
+	Name        string                           // Name of the method, e.g. "Index"
+	Args        []*MethodArg                     // Argument descriptors
+	RenderCalls []*MethodCall                    // Descriptions of Render() invocations from this Method.
+	Options     controller.FunctionalAnnotations // Options for the method specification
 }
 
 // MethodArg holds the information of one argument

@@ -36,7 +36,7 @@ type methodMap map[string][]*model.MethodSpec
 // Otherwise CompileError if the parsing fails.
 func ProcessSource(paths *model.RevelContainer) (_ *model.SourceInfo, compileError error) {
 	pc := &processContainer{paths: paths}
-	for _, root := range paths.CodePaths {
+	for _, root := range paths.Units.GetCodePaths() {
 		rootImportPath := importPathFromPath(root)
 		if rootImportPath == "" {
 			utils.Logger.Info("Skipping empty code path", "path", root)
@@ -80,7 +80,7 @@ func (pc *processContainer) processPath(path string, info os.FileInfo, err error
 		func(f os.FileInfo) bool {
 			return !f.IsDir() && !strings.HasPrefix(f.Name(), ".") && strings.HasSuffix(f.Name(), ".go")
 		},
-		0)
+		parser.ParseComments)
 
 	if err != nil {
 		if errList, ok := err.(scanner.ErrorList); ok {
@@ -95,7 +95,7 @@ func (pc *processContainer) processPath(path string, info os.FileInfo, err error
 				SourceLines: utils.MustReadLines(pos.Filename),
 			}
 
-			errorLink := pc.paths.Config.StringDefault("error.link", "")
+			errorLink := pc.paths.Info.Config.StringDefault("error.link", "")
 			if errorLink != "" {
 				newError.SetLink(errorLink)
 			}
@@ -166,6 +166,7 @@ func processPackage(fset *token.FileSet, pkgImportPath, pkgPath string, pkg *ast
 		// Imports maps the package key to the full import path.
 		// e.g. import "sample/app/models" => "models": "sample/app/models"
 		imports := map[string]string{}
+		println(fname, scanControllers)
 
 		// For each declaration in the source file...
 		for _, decl := range file.Decls {
@@ -223,25 +224,3 @@ func getFuncName(funcDecl *ast.FuncDecl) string {
 	return prefix + funcDecl.Name.Name
 }
 
-// getStructTypeDecl checks if the given decl is a type declaration for a
-// struct.  If so, the TypeSpec is returned.
-func getStructTypeDecl(decl ast.Decl, fset *token.FileSet) (spec *ast.TypeSpec, found bool) {
-	genDecl, ok := decl.(*ast.GenDecl)
-	if !ok {
-		return
-	}
-
-	if genDecl.Tok != token.TYPE {
-		return
-	}
-
-	if len(genDecl.Specs) == 0 {
-		utils.Logger.Warn("Warn: Surprising: %s:%d Decl contains no specifications", fset.Position(decl.Pos()).Filename, fset.Position(decl.Pos()).Line)
-		return
-	}
-
-	spec = genDecl.Specs[0].(*ast.TypeSpec)
-	_, found = spec.Type.(*ast.StructType)
-
-	return
-}

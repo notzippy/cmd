@@ -126,25 +126,25 @@ func runApp(c *model.CommandConfig) (err error) {
 		c.Run.Mode = "dev"
 	}
 
-	revel_path, err := model.NewRevelPaths(c.Run.Mode, c.ImportPath, "", model.NewWrappedRevelCallback(nil, c.PackageResolver))
+	revel_path, err := model.NewRevelPaths(c.Run.Mode, c.ImportPath, model.NewWrappedRevelCallback(nil, c.PackageResolver))
 	if err != nil {
 		return utils.NewBuildIfError(err, "Revel paths")
 	}
 	if c.Run.Port > -1 {
-		revel_path.HTTPPort = c.Run.Port
+		revel_path.Server.HTTPPort = c.Run.Port
 	} else {
-		c.Run.Port = revel_path.HTTPPort
+		c.Run.Port = revel_path.Server.HTTPPort
 	}
 
-	utils.Logger.Infof("Running %s (%s) in %s mode\n", revel_path.AppName, revel_path.ImportPath, revel_path.RunMode)
-	utils.Logger.Debug("Base path:", "path", revel_path.BasePath)
+	utils.Logger.Infof("Running %s (%s) in %s mode\n", revel_path.App.Name, revel_path.App.ImportPath, revel_path.Info.RunMode)
+	utils.Logger.Debug("Base path:", "path", revel_path.App.BasePath)
 
 	// If the app is run in "watched" mode, use the harness to run it.
-	if revel_path.Config.BoolDefault("watch", true) && revel_path.Config.BoolDefault("watch.code", true) {
+	if revel_path.Info.Config.BoolDefault("watch", true) && revel_path.Info.Config.BoolDefault("watch.code", true) {
 		utils.Logger.Info("Running in watched mode.")
-		runMode := fmt.Sprintf(`{"mode":"%s", "specialUseFlag":%v}`, revel_path.RunMode, c.Verbose)
+		runMode := fmt.Sprintf(`{"mode":"%s", "specialUseFlag":%v}`, revel_path.Info.RunMode, c.Verbose)
 		if c.HistoricMode {
-			runMode = revel_path.RunMode
+			runMode = revel_path.Info.RunMode
 		}
 		// **** Never returns.
 		harness.NewHarness(c, revel_path, runMode, c.Run.NoProxy).Run()
@@ -156,10 +156,10 @@ func runApp(c *model.CommandConfig) (err error) {
 	if err != nil {
 		utils.Logger.Errorf("Failed to build app: %s", err)
 	}
-	app.Port = revel_path.HTTPPort
-	runMode := fmt.Sprintf(`{"mode":"%s", "specialUseFlag":%v}`, app.Paths.RunMode, c.Verbose)
+	app.Port = revel_path.Server.HTTPPort
+	runMode := fmt.Sprintf(`{"mode":"%s", "specialUseFlag":%v}`, app.Paths.Info.RunMode, c.Verbose)
 	if c.HistoricMode {
-		runMode = revel_path.RunMode
+		runMode = revel_path.Info.RunMode
 	}
 	app.Cmd(runMode).Run()
 	return

@@ -46,7 +46,7 @@ func Build(c *model.CommandConfig, paths *model.RevelContainer) (_ *App, err err
 	}
 
 	// Add the db.import to the import paths.
-	if dbImportPath, found := paths.Config.String("db.import"); found {
+	if dbImportPath, found := paths.Info.Config.String("db.import"); found {
 		sourceInfo.InitImportPaths = append(sourceInfo.InitImportPaths, strings.Split(dbImportPath, ",")...)
 	}
 
@@ -56,7 +56,7 @@ func Build(c *model.CommandConfig, paths *model.RevelContainer) (_ *App, err err
 
 	// Generate two source files.
 	templateArgs := map[string]interface{}{
-		"ImportPath":     paths.ImportPath,
+		"ImportPath":     paths.App.ImportPath,
 		"Controllers":    controllers,
 		"ValidationKeys": sourceInfo.ValidationKeys,
 		"ImportPaths":    calcImportAliases(sourceInfo),
@@ -79,7 +79,7 @@ func Build(c *model.CommandConfig, paths *model.RevelContainer) (_ *App, err err
 	}
 
 	// Read build config.
-	buildTags := paths.Config.StringDefault("build.tags", "")
+	buildTags := paths.Info.Config.StringDefault("build.tags", "")
 
 	// Build the user program (all code under app).
 	// It relies on the user having "go" installed.
@@ -89,8 +89,8 @@ func Build(c *model.CommandConfig, paths *model.RevelContainer) (_ *App, err err
 	}
 
 	// Detect if deps tool should be used (is there a vendor folder ?)
-	useVendor := utils.DirExists(filepath.Join(paths.BasePath, "vendor"))
-	basePath := paths.BasePath
+	useVendor := utils.DirExists(filepath.Join(paths.App.BasePath, "vendor"))
+	basePath := paths.App.BasePath
 	for !useVendor {
 		basePath = filepath.Dir(basePath)
 		found := false
@@ -108,13 +108,13 @@ func Build(c *model.CommandConfig, paths *model.RevelContainer) (_ *App, err err
 		}
 	}
 
-	pkg, err := build.Default.Import(paths.ImportPath, "", build.FindOnly)
+	pkg, err := build.Default.Import(paths.App.ImportPath, "", build.FindOnly)
 	if err != nil {
 		return
 	}
 
 	// Binary path is a combination of $GOBIN/revel.d directory, app's import path and its name.
-	binName := filepath.Join(pkg.BinDir, "revel.d", paths.ImportPath, filepath.Base(paths.BasePath))
+	binName := filepath.Join(pkg.BinDir, "revel.d", paths.App.ImportPath, filepath.Base(paths.App.BasePath))
 
 	// Change binary path for Windows build
 	goos := runtime.GOOS
@@ -140,7 +140,7 @@ func Build(c *model.CommandConfig, paths *model.RevelContainer) (_ *App, err err
 
 		buildTime := time.Now().UTC().Format(time.RFC3339)
 		versionLinkerFlags := fmt.Sprintf("-X %s/app.AppVersion=%s -X %s/app.BuildTime=%s",
-			paths.ImportPath, appVersion, paths.ImportPath, buildTime)
+			paths.App.ImportPath, appVersion, paths.App.ImportPath, buildTime)
 
 		// Append any build flags specified, they will override existing flags
 		flags := []string{}
@@ -172,12 +172,12 @@ func Build(c *model.CommandConfig, paths *model.RevelContainer) (_ *App, err err
 
 		// This is Go main path
 		gopath := c.GoPath
-		for _, o := range paths.ModulePathMap {
-			gopath += string(filepath.ListSeparator) + o
+		for _, o := range paths.Paths.ModuleMap {
+			gopath += string(filepath.ListSeparator) + o.BasePath
 		}
 
 		// Note: It's not applicable for filepath.* usage
-		flags = append(flags, path.Join(paths.ImportPath, "app", "tmp"))
+		flags = append(flags, path.Join(paths.App.ImportPath, "app", "tmp"))
 
 		buildCmd := exec.Command(goPath, flags...)
 		buildCmd.Env = append(os.Environ(),
@@ -241,12 +241,12 @@ func getAppVersion(paths *model.RevelContainer) string {
 	// Check for the git binary
 	if gitPath, err := exec.LookPath("git"); err == nil {
 		// Check for the .git directory
-		gitDir := filepath.Join(paths.BasePath, ".git")
+		gitDir := filepath.Join(paths.App.BasePath, ".git")
 		info, err := os.Stat(gitDir)
 		if (err != nil && os.IsNotExist(err)) || !info.IsDir() {
 			return ""
 		}
-		gitCmd := exec.Command(gitPath, "--git-dir="+gitDir, "--work-tree="+paths.BasePath, "describe", "--always", "--dirty")
+		gitCmd := exec.Command(gitPath, "--git-dir="+gitDir, "--work-tree="+paths.App.BasePath, "describe", "--always", "--dirty")
 		utils.Logger.Info("Exec:", "args", gitCmd.Args)
 		output, err := gitCmd.Output()
 
@@ -263,13 +263,19 @@ func getAppVersion(paths *model.RevelContainer) string {
 
 func cleanSource(paths *model.RevelContainer, dirs ...string) {
 	for _, dir := range dirs {
-		cleanDir(paths, dir)
+		tmpPath := filepath.Join(paths.App.GetCodePath(), dir)
+		if !utils.DirExists(tmpPath) {
+			continue
+		}
+		if err:=os.RemoveAll(tmpPath);err!=nil {
+			utils.Logger.Error("Failed to clean dir:", "error", err)
+		}
 	}
 }
 
 func cleanDir(paths *model.RevelContainer, dir string) {
 	utils.Logger.Info("Cleaning dir ", "dir", dir)
-	tmpPath := filepath.Join(paths.AppPath, dir)
+	tmpPath := filepath.Join(paths.App.GetCodePath(), dir)
 	f, err := os.Open(tmpPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -308,7 +314,7 @@ func cleanDir(paths *model.RevelContainer, dir string) {
 // to the given directory and file.
 func genSource(paths *model.RevelContainer, dir, filename, templateSource string, args map[string]interface{}) error {
 
-	return utils.GenerateTemplate(filepath.Join(paths.AppPath, dir, filename), templateSource, args)
+	return utils.GenerateTemplate(filepath.Join(paths.App.GetCodePath(), dir, filename), templateSource, args)
 }
 
 // Looks through all the method args and returns a set of unique import paths
@@ -400,7 +406,7 @@ func newCompileError(paths *model.RevelContainer, output []byte) *utils.Error {
 		// Extract the paths from the gopaths, and search for file there first
 		gopaths := filepath.SplitList(build.Default.GOPATH)
 		for _, gp := range gopaths {
-			newPath := filepath.Join(gp,"src", paths.ImportPath, relFilename)
+			newPath := filepath.Join(gp,"src", paths.App.ImportPath, relFilename)
 			println(newPath)
 			if utils.Exists(newPath) {
 				return newPath
@@ -427,7 +433,7 @@ func newCompileError(paths *model.RevelContainer, output []byte) *utils.Error {
 		}
 	)
 
-	errorLink := paths.Config.StringDefault("error.link", "")
+	errorLink := paths.Info.Config.StringDefault("error.link", "")
 
 	if errorLink != "" {
 		compileError.SetLink(errorLink)

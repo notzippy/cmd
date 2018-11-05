@@ -28,7 +28,7 @@ type App struct {
 
 // NewApp returns app instance with binary path in it
 func NewApp(binPath string, paths *model.RevelContainer) *App {
-	return &App{BinaryPath: binPath, Paths: paths, Port: paths.HTTPPort}
+	return &App{BinaryPath: binPath, Paths: paths, Port: paths.Server.HTTPPort}
 }
 
 // Cmd returns a command to run the app server using the current configuration.
@@ -52,7 +52,7 @@ type AppCmd struct {
 func NewAppCmd(binPath string, port int, runMode string, paths *model.RevelContainer) AppCmd {
 	cmd := exec.Command(binPath,
 		fmt.Sprintf("-port=%d", port),
-		fmt.Sprintf("-importPath=%s", paths.ImportPath),
+		fmt.Sprintf("-importPath=%s", paths.App.ImportPath),
 		fmt.Sprintf("-runMode=%s", runMode))
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return AppCmd{cmd}

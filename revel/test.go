@@ -78,7 +78,7 @@ func testApp(c *model.CommandConfig) (err error) {
 	}
 
 	// Find and parse app.conf
-	revel_path, err := model.NewRevelPaths(mode, c.ImportPath, "", model.NewWrappedRevelCallback(nil, c.PackageResolver))
+	revel_path, err := model.NewRevelPaths(mode, c.ImportPath, model.NewWrappedRevelCallback(nil, c.PackageResolver))
 	if err != nil {
 		return
 	}
@@ -86,7 +86,7 @@ func testApp(c *model.CommandConfig) (err error) {
 	// todo Ensure that the testrunner is loaded in this mode.
 
 	// Create a directory to hold the test result files.
-	resultPath := filepath.Join(revel_path.BasePath, "test-results")
+	resultPath := filepath.Join(revel_path.App.BasePath, "test-results")
 	if err = os.RemoveAll(resultPath); err != nil {
 		return utils.NewBuildError("Failed to remove test result directory ", "path", resultPath, "error", err)
 	}
@@ -104,9 +104,9 @@ func testApp(c *model.CommandConfig) (err error) {
 	if reverr != nil {
 		return utils.NewBuildIfError(reverr, "Error building: ")
 	}
-	runMode := fmt.Sprintf(`{"mode":"%s","testModeFlag":true, "specialUseFlag":%v}`, app.Paths.RunMode, c.Verbose)
+	runMode := fmt.Sprintf(`{"mode":"%s","testModeFlag":true, "specialUseFlag":%v}`, app.Paths.Info.RunMode, c.Verbose)
 	if c.HistoricMode {
-		runMode = app.Paths.RunMode
+		runMode = app.Paths.Info.RunMode
 	}
 	cmd := app.Cmd(runMode)
 
@@ -119,20 +119,20 @@ func testApp(c *model.CommandConfig) (err error) {
 	}
 	defer cmd.Kill()
 
-	var httpAddr = revel_path.HTTPAddr
+	var httpAddr = revel_path.Server.HTTPAddr
 	if httpAddr == "" {
 		httpAddr = "localhost"
 	}
 
 	var httpProto = "http"
-	if revel_path.HTTPSsl {
+	if revel_path.Server.HTTPSsl {
 		httpProto = "https"
 	}
 
 	// Get a list of tests
-	var baseURL = fmt.Sprintf("%s://%s:%d", httpProto, httpAddr, revel_path.HTTPPort)
+	var baseURL = fmt.Sprintf("%s://%s:%d", httpProto, httpAddr, revel_path.Server.HTTPPort)
 
-	utils.Logger.Infof("Testing %s (%s) in %s mode URL %s \n", revel_path.AppName, revel_path.ImportPath, mode, baseURL)
+	utils.Logger.Infof("Testing %s (%s) in %s mode URL %s \n", revel_path.App.Name, revel_path.App.ImportPath, mode, baseURL)
 	testSuites, _ := getTestsList(baseURL)
 
 	// If a specific TestSuite[.Method] is specified, only run that suite/test
@@ -258,7 +258,7 @@ func getTestsList(baseURL string) (*[]tests.TestSuiteDesc, error) {
 func runTestSuites(paths *model.RevelContainer, baseURL, resultPath string, testSuites *[]tests.TestSuiteDesc) (*[]tests.TestSuiteResult, bool) {
 
 	// We can determine the testsuite location by finding the test module and extracting the data from it
-	resultFilePath := filepath.Join(paths.ModulePathMap["testrunner"], "app", "views", "TestRunner/SuiteResult.html")
+	resultFilePath := filepath.Join(paths.Paths.ModuleMap["testrunner"].BasePath, "app", "views", "TestRunner/SuiteResult.html")
 
 	var (
 		overallSuccess = true

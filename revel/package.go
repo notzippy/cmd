@@ -58,13 +58,13 @@ func packageApp(c *model.CommandConfig) (err error) {
 	}
 
 	appImportPath := c.ImportPath
-	revel_paths, err := model.NewRevelPaths(mode, appImportPath, "", model.NewWrappedRevelCallback(nil, c.PackageResolver))
+	revel_paths, err := model.NewRevelPaths(mode, appImportPath, model.NewWrappedRevelCallback(nil, c.PackageResolver))
 	if err != nil {
 		return
 	}
 
 	// Remove the archive if it already exists.
-	destFile := filepath.Join(c.AppPath, filepath.Base(revel_paths.BasePath)+".tar.gz")
+	destFile := filepath.Join(c.AppPath, filepath.Base(revel_paths.App.BasePath)+".tar.gz")
 	if c.Package.TargetPath != "" {
 		if filepath.IsAbs(c.Package.TargetPath) {
 			destFile = c.Package.TargetPath
@@ -77,7 +77,7 @@ func packageApp(c *model.CommandConfig) (err error) {
 	}
 
 	// Collect stuff in a temp directory.
-	tmpDir, err := ioutil.TempDir("", filepath.Base(revel_paths.BasePath))
+	tmpDir, err := ioutil.TempDir("", filepath.Base(revel_paths.App.BasePath))
 	utils.PanicOnError(err, "Failed to get temp dir")
 
 	// Build expects the command the build to contain the proper data

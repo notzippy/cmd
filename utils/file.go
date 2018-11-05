@@ -341,20 +341,20 @@ func FindSrcPaths(appImportPath, revelImportPath string, packageResolver func(pk
 	}
 
 	appPkgDir := ""
-	appPkgSrcDir := ""
-	if len(appImportPath)>0 {
-		Logger.Info("Seeking app package","app",appImportPath)
+	if len(appImportPath) > 0 {
+		Logger.Info("Seeking app package", "app", appImportPath)
 		appPkg, err := build.Import(appImportPath, "", build.FindOnly)
 		if err != nil {
-			err = fmt.Errorf("Failed to import " + appImportPath + " with error %s", err.Error())
-			return "","",err
+			err = fmt.Errorf("Failed to import "+appImportPath+" with error %s", err.Error())
+			return "", "", err
 		}
-		appPkgDir,appPkgSrcDir =appPkg.Dir, appPkg.SrcRoot
+		// TODO Check this println("App stuff", appPkg.Dir, " the root ", appPkg.SrcRoot )
+		appPkgDir, appSourcePath = appPkg.Dir, appPkg.SrcRoot
 	}
-	Logger.Info("Seeking remote package","using",appImportPath, "remote",revelImportPath)
+	Logger.Info("Seeking remote package", "using", appImportPath, "remote", revelImportPath)
 	revelPkg, err := build.Default.Import(revelImportPath, appPkgDir, build.FindOnly)
 	if err != nil {
-		Logger.Info("Resolved called Seeking remote package","using",appImportPath, "remote",revelImportPath)
+		Logger.Info("Resolved called Seeking remote package", "using", appImportPath, "remote", revelImportPath)
 		packageResolver(revelImportPath)
 		revelPkg, err = build.Import(revelImportPath, appPkgDir, build.FindOnly)
 		if err != nil {
@@ -363,6 +363,6 @@ func FindSrcPaths(appImportPath, revelImportPath string, packageResolver func(pk
 		}
 	}
 
-	revelSourcePath, appSourcePath = revelPkg.Dir[:len(revelPkg.Dir)-len(revelImportPath)], appPkgSrcDir
+	revelSourcePath = revelPkg.Dir[:len(revelPkg.Dir)-len(revelImportPath)]
 	return
 }
